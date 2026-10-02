@@ -1,0 +1,9 @@
+streamlit>=1.37
+pandas>=2.1
+numpy>=1.26
+scikit-learn>=1.4
+openai>=1.40
+plotly>=5.22
+pydantic>=2.7
+python-dotenv>=1.0
+requests>=2.32
