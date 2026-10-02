@@ -1,136 +1,0 @@
-AI SDR Platform
-Technical Documentation
-Date: 2026-10-03
-Scope: ICP to Prospect Discovery, Enrichment, Intelligence, Qualification, Outreach, Conversation, Follow-Up, Meeting, CRM, Analytics
-Status: Current implementation documentation
-Technical Summary
-The implementation is a FastAPI and Streamlit SDR workflow backed by Pydantic contracts, SQLAlchemy repositories, Apollo.io discovery, SearXNG/OpenSearch enrichment, LightGBM-based intelligence, MetaRank-ready feedback, Temporal workers, Brevo email, structured LLM conversation handling, and meeting/CRM provider adapters.
-1. Runtime Architecture
-Streamlit UI   -> FastAPI SDR backend :8011   -> ICP, Discovery, Enrichment, Intelligence, Qualification, Outreach APIs   -> Temporal workers for follow-up and meetings   -> SearXNG/OpenSearch for live enrichment   -> MetaRank for SDR queue reranking   -> Brevo, Google Calendar/Cal.com, Twenty CRM provider adapters
-2. Library and Tool Stack
-Area
-Libraries / Tools
-Reason
-API
-FastAPI, Uvicorn, Pydantic
-Typed backend routes and validated contracts.
-Persistence
-SQLAlchemy, SQLite, PostgreSQL-ready URLs
-Agent state, campaigns, conversations, meetings, CRM syncs.
-Discovery
-Apollo.io API, requests
-Real production prospect accounts and contacts.
-Public sources
-SearXNG/SearchXNG, OpenSearch, GLEIF, SEC EDGAR, OpenCorporates, Companies House
-Fallback/public account discovery and enrichment evidence.
-ML
-LightGBM, scikit-learn calibration, joblib
-Intent, reply, meeting, and qualification propensity models.
-Explainability
-SHAP
-Model contribution explanations.
-Ranking
-MetaRank
-Learning-to-rank from SDR outcome events.
-Observability
-Langfuse-compatible hooks, OpenTelemetry-ready structure
-Trace LLM/agent activity and provider failures.
-Workflow
-Temporal, temporalio
-Durable sequence, follow-up, and meeting workflows.
-Outreach
-Brevo API, SMTP/SES-ready provider registry, rate limiter
-Email sending, event ingestion, provider-safe operations.
-Conversation
-Ollama-compatible structured LLM, deterministic guardrails
-Reply classification and draft generation.
-Meeting/CRM
-Google Calendar API, Cal.com API, Twenty CRM API
-Real calendar booking and CRM handoff.
-Operator
-OpenClaw
-Controlled copilot layer calling backend APIs.
-3. Apollo Configuration
-SDR_DISCOVERY_PROVIDER=apollo_api SDR_DISCOVERY_APOLLO_API_KEY=your_apollo_master_api_key SDR_DISCOVERY_APOLLO_BASE_URL=https://api.apollo.io SDR_DISCOVERY_APOLLO_ALLOW_PUBLIC_FALLBACK=false SDR_DISCOVERY_ENABLE_WEB_SEARCH=false
-Strict Apollo mode is the default: Apollo Organization Search and People API Search are used directly.
-A 403 from Apollo means the key or plan is forbidden from that API endpoint, not that the local pipeline failed.
-Set SDR_DISCOVERY_APOLLO_ALLOW_PUBLIC_FALLBACK=true only when you want Apollo-first fallback for demos.
-Set reveal flags only if the Apollo plan and credits support email/phone enrichment.
-4. Agent Modules
-Module
-Primary Files
-Implementation
-ICP
-ai_sdr_platform/src/agents/icp
-Pydantic ICP schema, validation, optional LLM suggestions.
-Discovery
-agents/prospect_discovery
-Provider abstraction, Apollo API provider, composite fallback providers, SQLAlchemy repository.
-Enrichment
-agents/enrichment
-Search provider abstraction, live retrieval, LLM synthesis, evidence persistence.
-Intelligence
-agents/prospect_intelligence
-Signal normalization, LightGBM models, calibrated probabilities, SHAP/MetaRank hooks.
-Qualification
-agents/qualification
-Qualification probability plus BANT/MEDDIC evidence gate.
-Outreach
-agents/outreach
-Policy, review, composer, provider registry, Brevo/dry-run providers.
-Conversation
-agents/conversation
-Structured reply classifier, compliance guardrails, approved response drafts.
-Follow-Up
-agents/follow_up
-Temporal workflow, plan repository, due processing.
-Meeting
-agents/meeting
-Google Calendar/Cal.com providers and Temporal reminder worker.
-CRM
-agents/crm
-Twenty provider and dry-run records.
-Marketplace
-app/models_market.py, services/shopify.py, routers/marketplace.py
-Seller accounts, Shopify catalog import, signed webhooks, two-way stock sync.
-5. Required Runtime Services
-Service
-Port
-Purpose
-SearXNG
-8080
-Live web evidence for enrichment.
-MetaRank
-8081
-SDR queue reranking and event feedback.
-Temporal
-7233 / 8233 UI
-Durable workflow execution.
-FastAPI SDR Backend
-8011
-Agent API surface.
-Streamlit
-8501 default
-Operator UI and chatbot.
-6. Startup Commands
-cd <project-root> source .venv/bin/activate  set -a source ai_sdr_platform/.env.sdr set +a  export SDR_DISCOVERY_PROVIDER=apollo_api export SDR_DISCOVERY_APOLLO_API_KEY="YOUR_APOLLO_KEY" export SDR_DISCOVERY_APOLLO_ALLOW_PUBLIC_FALLBACK=false export SDR_API_BASE_URL=http://127.0.0.1:8011  uvicorn ai_sdr_platform.src.api.app:create_app --factory --host 127.0.0.1 --port 8011 --reload
-7. Production Readiness Notes
-Apollo access must be validated with the customer’s actual Apollo plan before live demos.
-Bootstrap LightGBM models should be retrained on real SDR outcome labels before production scoring claims.
-MetaRank should receive ranking and interaction events before being treated as the main ranker.
-PostgreSQL migrations should replace local SQLite for production state.
-Provider credentials must stay in backend environment variables or secret stores, not UI fields.
-8. Marketplace and Shopify (Store Backend)
-Files: app/models_market.py, app/services/shopify.py, app/routers/marketplace.py, Streamlit pages page_sell and the Admin Sellers tab.
-Wiring: main.py imports models_market and includes marketplace.router; services/orders.py calls shopify.sync_order_stock after an order is marked paid.
-Environment: SHOPIFY_API_SECRET (webhook signing secret), SHOPIFY_API_VERSION (default 2025-07).
-Endpoints: POST /sellers, GET /sellers/me, GET /sellers/{slug}/products, PUT /sellers/me/shopify, POST /sellers/me/shopify/import, POST /webhooks/shopify, GET /admin/sellers, POST /admin/sellers/{id}/status.
-Shopify webhooks to register: products/create, products/update, inventory_levels/update pointing at /webhooks/shopify.
-Security: HMAC-SHA256 verification on the raw body, *.myshopify.com domain allowlist, pagination restricted to the shop host, webhook de-duplication via webhook_events. Access tokens are plaintext today and must be encrypted before production.
-Tests: tests/test_marketplace.py (Shopify calls are monkeypatched).
-Handoff from the SDR flow is a process step today, not an API integration.
-9. References
-Apollo Organization Search: https://docs.apollo.io/reference/organization-search
-Apollo People API Search: https://docs.apollo.io/reference/people-api-search
-Apollo People Enrichment: https://docs.apollo.io/reference/people-enrichment
-Local docs: ai_sdr_platform/docs/prospect_discovery.md, meeting_crm.md, qualification_agent.md.
